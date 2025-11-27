@@ -1,0 +1,77 @@
+#!/bin/bash
+
+# Enable error tracing
+exec 2>&1
+echo "Starting container entrypoint..."
+
+set -e
+
+# Add container tools to PATH
+export PATH="/container/tool:$PATH"
+
+# Set container directory defaults (also set in Dockerfile ENV)
+export CONTAINER_SERVICE_DIR="${CONTAINER_SERVICE_DIR:-/container/service}"
+export CONTAINER_STATE_DIR="${CONTAINER_STATE_DIR:-/container/state}"
+
+echo "Loading environment variables..."
+
+# Load environment variables from YAML files
+# Simple YAML parser - handles key: value pairs, skips comments and lists
+load_env_from_yaml() {
+    local dir=$1
+    if [ -d "$dir" ]; then
+        for file in "$dir"/*.yaml "$dir"/*.yml; do
+            [ -f "$file" ] || continue
+            while IFS= read -r line || [ -n "$line" ]; do
+                # Skip comments, empty lines, and list items
+                [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+                [[ "$line" =~ ^[[:space:]]*- ]] && continue
+
+                # Extract key and value (only first colon is delimiter)
+                if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:[[:space:]]*(.*) ]]; then
+                    key="${BASH_REMATCH[1]}"
+                    value="${BASH_REMATCH[2]}"
+
+                    # Remove trailing comments (but not in quoted strings)
+                    value=$(echo "$value" | sed 's/[[:space:]]*#.*$//')
+
+                    # Only set if not already set and value is not empty
+                    if [ -z "${!key}" ] && [ -n "$value" ]; then
+                        export "$key"="$value"
+                    fi
+                fi
+            done < "$file"
+        done
+    fi
+}
+
+# Load environment from all environment directories
+for env_dir in /container/environment/*; do
+    [ -d "$env_dir" ] && load_env_from_yaml "$env_dir"
+done
+
+echo "Environment loaded."
+
+# Set default values if not set
+export LDAP_LOG_LEVEL="${LDAP_LOG_LEVEL:-256}"
+export LDAP_NOFILE="${LDAP_NOFILE:-1024}"
+export LDAP_PORT="${LDAP_PORT:-389}"
+export LDAPS_PORT="${LDAPS_PORT:-636}"
+export DISABLE_CHOWN="${DISABLE_CHOWN:-false}"
+
+echo "Running startup script..."
+
+# Run startup script
+if [ -x "${CONTAINER_SERVICE_DIR}/slapd/startup.sh" ]; then
+    "${CONTAINER_SERVICE_DIR}/slapd/startup.sh" || {
+        echo "ERROR: Startup script failed with exit code $?"
+        exit 1
+    }
+fi
+
+echo "Startup script completed successfully."
+echo "Starting slapd process..."
+
+# Run process script
+exec "${CONTAINER_SERVICE_DIR}/slapd/process.sh"

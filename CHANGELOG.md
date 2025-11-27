@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-11-27
+
+### Changed
+  - **BREAKING**: Upgrade OpenLDAP from 2.4.57 to 2.6.10 (Debian Trixie packages)
+  - **BREAKING**: Base image changed from osixia/light-baseimage to debian:trixie-slim
+  - **BREAKING**: Removed support for hdb/bdb backends (removed in OpenLDAP 2.5)
+  - **BREAKING**: Rebranding from osixia to startcodex
+  - Replication config: `olcMirrorMode` renamed to `olcMultiProvider` (OpenLDAP 2.5+ change)
+  - LDAP client utilities now use `-H ldap://` URI format instead of deprecated `-h`/`-p` options
+  - `slaptest` output directory handling updated for OpenLDAP 2.6 compatibility
+
+### Removed
+  - Support for hdb and bdb database backends (only mdb is supported in OpenLDAP 2.5+)
+  - Dependency on light-baseimage (replaced with standalone tools)
+  - pqchecker password quality checker (not available for Debian Trixie)
+
+### Added
+  - Standalone helper tools (run, log-helper, ssl-helper, complex-bash-env)
+  - `FQDN` environment variable to pass fully qualified domain name directly (useful for Docker Swarm/Kubernetes)
+  - Pass FQDN to slapd when `olcServerID` was previously configured (fixes replication restart issues)
+  - Multi-master replication tested and working with OpenLDAP 2.6
+
+### Fixed
+  - Schema conversion with `slaptest -F` now uses separate output directory (OpenLDAP 2.6 requirement)
+  - SIGPIPE errors during startup (removed `set -o pipefail`)
+  - `/etc/ldap/ldap.conf` creation for TLS configuration on Debian Trixie
+  - `complex-bash-env` now properly handles `#DIFFNAME#` format for replication hosts
+
+### Migration Notes
+  - If you are using hdb or bdb backend, you MUST migrate to mdb before upgrading
+  - Existing databases using mdb backend should work without changes
+  - Custom replication configurations using `olcMirrorMode` must be updated to `olcMultiProvider`
+  - Image name changed from `osixia/openldap` to `startcodex/openldap`
+
 ## [1.5.0] - 2021-02-19
 50M+ docker pulls 🎉🎉🎉 thanks to all contributors 💕
 
@@ -293,37 +327,38 @@ Environment variable LDAP_REPLICATION_HDB_SYNCPROV changed to LDAP_REPLICATION_D
 ## [0.10.0] - 2015-03-03
 New version initial release, no changelog before this sorry.
 
-[1.5.0]: https://github.com/osixia/docker-openldap/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/osixia/docker-openldap/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/osixia/docker-openldap/compare/v1.2.5...v1.3.0
-[1.2.5]: https://github.com/osixia/docker-openldap/compare/v1.2.4...v1.2.5
-[1.2.4]: https://github.com/osixia/docker-openldap/compare/v1.2.3...v1.2.4
-[1.2.3]: https://github.com/osixia/docker-openldap/compare/v1.2.2...v1.2.3
-[1.2.2]: https://github.com/osixia/docker-openldap/compare/v1.2.1...v1.2.2
-[1.2.1]: https://github.com/osixia/docker-openldap/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/osixia/docker-openldap/compare/v1.1.11...v1.2.0
-[1.1.11]: https://github.com/osixia/docker-openldap/compare/v1.1.10...v1.1.11
-[1.1.10]: https://github.com/osixia/docker-openldap/compare/v1.1.9...v1.1.10
-[1.1.9]: https://github.com/osixia/docker-openldap/compare/v1.1.8...v1.1.9
-[1.1.8]: https://github.com/osixia/docker-openldap/compare/v1.1.7...v1.1.8
-[1.1.7]: https://github.com/osixia/docker-openldap/compare/v1.1.6...v1.1.7
-[1.1.6]: https://github.com/osixia/docker-openldap/compare/v1.1.5...v1.1.6
-[1.1.5]: https://github.com/osixia/docker-openldap/compare/v1.1.4...v1.1.5
-[1.1.4]: https://github.com/osixia/docker-openldap/compare/v1.1.3...v1.1.4
-[1.1.3]: https://github.com/osixia/docker-openldap/compare/v1.1.2...v1.1.3
-[1.1.2]: https://github.com/osixia/docker-openldap/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/osixia/docker-openldap/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/osixia/docker-openldap/compare/v1.0.9...v1.1.0
-[1.0.9]: https://github.com/osixia/docker-openldap/compare/v1.0.8...v1.0.9
-[1.0.8]: https://github.com/osixia/docker-openldap/compare/v1.0.7...v1.0.8
-[1.0.7]: https://github.com/osixia/docker-openldap/compare/v1.0.6...v1.0.7
-[1.0.6]: https://github.com/osixia/docker-openldap/compare/v1.0.5...v1.0.6
-[1.0.5]: https://github.com/osixia/docker-openldap/compare/v1.0.4...v1.0.5
-[1.0.4]: https://github.com/osixia/docker-openldap/compare/v1.0.3...v1.0.4
-[1.0.3]: https://github.com/osixia/docker-openldap/compare/v1.0.2...v1.0.3
-[1.0.2]: https://github.com/osixia/docker-openldap/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/osixia/docker-openldap/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/osixia/docker-openldap/compare/v1.10.2...v1.0.0
-[0.10.2]: https://github.com/osixia/docker-openldap/compare/v0.10.1...v0.10.2
-[0.10.1]: https://github.com/osixia/docker-openldap/compare/v0.10.0...v0.10.1
-[0.10.0]: https://github.com/osixia/docker-openldap/compare/v0.1.0...v0.10.0
+[2.0.0]: https://github.com/startcodex/docker-openldap/compare/v1.5.0...v2.0.0
+[1.5.0]: https://github.com/startcodex/docker-openldap/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/startcodex/docker-openldap/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/startcodex/docker-openldap/compare/v1.2.5...v1.3.0
+[1.2.5]: https://github.com/startcodex/docker-openldap/compare/v1.2.4...v1.2.5
+[1.2.4]: https://github.com/startcodex/docker-openldap/compare/v1.2.3...v1.2.4
+[1.2.3]: https://github.com/startcodex/docker-openldap/compare/v1.2.2...v1.2.3
+[1.2.2]: https://github.com/startcodex/docker-openldap/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/startcodex/docker-openldap/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/startcodex/docker-openldap/compare/v1.1.11...v1.2.0
+[1.1.11]: https://github.com/startcodex/docker-openldap/compare/v1.1.10...v1.1.11
+[1.1.10]: https://github.com/startcodex/docker-openldap/compare/v1.1.9...v1.1.10
+[1.1.9]: https://github.com/startcodex/docker-openldap/compare/v1.1.8...v1.1.9
+[1.1.8]: https://github.com/startcodex/docker-openldap/compare/v1.1.7...v1.1.8
+[1.1.7]: https://github.com/startcodex/docker-openldap/compare/v1.1.6...v1.1.7
+[1.1.6]: https://github.com/startcodex/docker-openldap/compare/v1.1.5...v1.1.6
+[1.1.5]: https://github.com/startcodex/docker-openldap/compare/v1.1.4...v1.1.5
+[1.1.4]: https://github.com/startcodex/docker-openldap/compare/v1.1.3...v1.1.4
+[1.1.3]: https://github.com/startcodex/docker-openldap/compare/v1.1.2...v1.1.3
+[1.1.2]: https://github.com/startcodex/docker-openldap/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/startcodex/docker-openldap/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/startcodex/docker-openldap/compare/v1.0.9...v1.1.0
+[1.0.9]: https://github.com/startcodex/docker-openldap/compare/v1.0.8...v1.0.9
+[1.0.8]: https://github.com/startcodex/docker-openldap/compare/v1.0.7...v1.0.8
+[1.0.7]: https://github.com/startcodex/docker-openldap/compare/v1.0.6...v1.0.7
+[1.0.6]: https://github.com/startcodex/docker-openldap/compare/v1.0.5...v1.0.6
+[1.0.5]: https://github.com/startcodex/docker-openldap/compare/v1.0.4...v1.0.5
+[1.0.4]: https://github.com/startcodex/docker-openldap/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/startcodex/docker-openldap/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/startcodex/docker-openldap/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/startcodex/docker-openldap/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/startcodex/docker-openldap/compare/v1.10.2...v1.0.0
+[0.10.2]: https://github.com/startcodex/docker-openldap/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/startcodex/docker-openldap/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/startcodex/docker-openldap/compare/v0.1.0...v0.10.0

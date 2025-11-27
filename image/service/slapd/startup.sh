@@ -1,8 +1,8 @@
 #!/bin/bash -e
-set -o pipefail
+
+# Note: pipefail removed to avoid SIGPIPE issues with log-helper pipes
 
 # set -x (bash debug) if log level is trace
-# https://github.com/osixia/docker-light-baseimage/blob/master/image/tool/log-helper
 log-helper level eq trace && set -x
 
 # Reduce maximum number of number of open file descriptors to 1024
@@ -37,6 +37,13 @@ file_env() {
 file_env 'LDAP_ADMIN_PASSWORD'
 file_env 'LDAP_CONFIG_PASSWORD'
 file_env 'LDAP_READONLY_USER_PASSWORD'
+
+# Get FQDN early - needed for slapd startup with replication
+if [ -z "$FQDN" ]; then
+  log-helper info "FQDN not set, getting from hostname"
+  FQDN="$(/bin/hostname --fqdn)"
+fi
+log-helper info "Using FQDN: $FQDN"
 
 # create dir if they not already exists
 [ -d /var/lib/ldap ] || mkdir -p /var/lib/ldap
@@ -114,7 +121,7 @@ file_env 'LDAP_SEED_INTERNAL_LDIF_PATH'
 copy_internal_seed_if_exists "${LDAP_SEED_INTERNAL_LDIF_PATH}" "${CONTAINER_SERVICE_DIR}/slapd/assets/config/bootstrap/ldif/custom"
 
 # CONTAINER_SERVICE_DIR and CONTAINER_STATE_DIR variables are set by
-# the baseimage run tool more info : https://github.com/osixia/docker-light-baseimage
+# the container run tool
 
 # container first start
 if [ ! -e "$FIRST_START_DONE" ]; then
@@ -164,9 +171,9 @@ if [ ! -e "$FIRST_START_DONE" ]; then
       sed -i "s|{{ LDAP_READONLY_USER_PASSWORD_ENCRYPTED }}|${LDAP_READONLY_USER_PASSWORD_ENCRYPTED}|g" $LDIF_FILE
     fi
     if grep -iq changetype $LDIF_FILE ; then
-        ( ldapmodify -Y EXTERNAL -Q -H ldapi:/// -f $LDIF_FILE 2>&1 || ldapmodify -h localhost -p 389 -D cn=admin,$LDAP_BASE_DN -w "$LDAP_ADMIN_PASSWORD" -f $LDIF_FILE 2>&1 ) | log-helper debug
+        ( ldapmodify -Y EXTERNAL -Q -H ldapi:/// -f $LDIF_FILE 2>&1 || ldapmodify -H ldap://localhost -D cn=admin,$LDAP_BASE_DN -w "$LDAP_ADMIN_PASSWORD" -f $LDIF_FILE 2>&1 ) | log-helper debug
     else
-        ( ldapadd -Y EXTERNAL -Q -H ldapi:/// -f $LDIF_FILE 2>&1 || ldapadd -h localhost -p 389 -D cn=admin,$LDAP_BASE_DN -w "$LDAP_ADMIN_PASSWORD" -f $LDIF_FILE 2>&1 ) | log-helper debug
+        ( ldapadd -Y EXTERNAL -Q -H ldapi:/// -f $LDIF_FILE 2>&1 || ldapadd -H ldap://localhost -D cn=admin,$LDAP_BASE_DN -w "$LDAP_ADMIN_PASSWORD" -f $LDIF_FILE 2>&1 ) | log-helper debug
     fi
   }
 
@@ -243,18 +250,12 @@ EOF
   # We have a database and config directory
   #
   else
-
-    # try to detect if ldap backend is hdb but LDAP_BACKEND environment variable is mdb
-    # due to default switch from hdb to mdb in 1.2.x
-    if [ "${LDAP_BACKEND}" = "mdb" ]; then
-      if [ -e "/etc/ldap/slapd.d/cn=config/olcDatabase={1}hdb.ldif" ]; then
-        log-helper warning -e "\n\n\nWarning: LDAP_BACKEND environment variable is set to mdb but hdb backend is detected."
-        log-helper warning "Going to use hdb as LDAP_BACKEND. Set LDAP_BACKEND=hdb to discard this message."
-        log-helper warning -e "https://github.com/osixia/docker-openldap#set-your-own-environment-variables\n\n\n"
-        LDAP_BACKEND="hdb"
-      fi
+    # OpenLDAP 2.5+ only supports mdb backend (hdb/bdb were removed)
+    if [ "${LDAP_BACKEND}" != "mdb" ]; then
+      log-helper error "Error: LDAP_BACKEND=${LDAP_BACKEND} is not supported. OpenLDAP 2.5+ only supports 'mdb' backend."
+      log-helper error "The hdb and bdb backends were removed in OpenLDAP 2.5."
+      exit 1
     fi
-
   fi
 
   if [ "${KEEP_EXISTING_CONFIG,,}" == "true" ]; then
@@ -305,11 +306,21 @@ EOF
 
     # start OpenLDAP
     log-helper info "Start OpenLDAP..."
-    # At this stage, we can just listen to ldap:// and ldap:// without naming any names
-    if log-helper level ge debug; then
-      slapd -h "ldap:/// ldapi:///" -u openldap -g openldap -d "$LDAP_LOG_LEVEL" 2>&1 &
+
+    # Check if olcServerID has been configured before (replication setup)
+    if [ -f /etc/ldap/slapd.d/cn=config.ldif ] && grep -q olcServerID /etc/ldap/slapd.d/cn=config.ldif; then
+      # Replication was configured, we need to pass the FQDN to -h
+      log-helper info "olcServerID found, using FQDN for slapd listener"
+      SLAPD_H_ARG="ldap://$FQDN ldapi:///"
     else
-      slapd -h "ldap:/// ldapi:///" -u openldap -g openldap
+      # No replication, just listen to local connections
+      SLAPD_H_ARG="ldap:/// ldapi:///"
+    fi
+
+    if log-helper level ge debug; then
+      slapd -h "$SLAPD_H_ARG" -u openldap -g openldap -d "$LDAP_LOG_LEVEL" 2>&1 &
+    else
+      slapd -h "$SLAPD_H_ARG" -u openldap -g openldap
     fi
 
 
@@ -398,7 +409,6 @@ EOF
       log-helper info "Add TLS config..."
 
       # generate a certificate and key with ssl-helper tool if LDAP_CRT and LDAP_KEY files don't exists
-      # https://github.com/osixia/docker-light-baseimage/blob/master/image/service-available/:ssl-tools/assets/tool/ssl-helper
       ssl-helper $LDAP_SSL_HELPER_PREFIX $LDAP_TLS_CRT_PATH $LDAP_TLS_KEY_PATH $LDAP_TLS_CA_CRT_PATH
 
       # create DHParamFile if not found
@@ -464,9 +474,14 @@ EOF
       log-helper info "Add replication config..."
       disableReplication || true
 
+      # Parse LDAP_REPLICATION_HOSTS and export individual variables
+      eval "$(complex-bash-env iterate LDAP_REPLICATION_HOSTS)"
+
       i=1
-      for host in $(complex-bash-env iterate LDAP_REPLICATION_HOSTS)
+      for host in LDAP_REPLICATION_HOSTS_0 LDAP_REPLICATION_HOSTS_1 LDAP_REPLICATION_HOSTS_2 LDAP_REPLICATION_HOSTS_3 LDAP_REPLICATION_HOSTS_4 LDAP_REPLICATION_HOSTS_5 LDAP_REPLICATION_HOSTS_6 LDAP_REPLICATION_HOSTS_7
       do
+        # Skip if variable is not set
+        [ -z "${!host}" ] && continue
         sed -i "s|{{ LDAP_REPLICATION_HOSTS }}|olcServerID: $i ${!host}\n{{ LDAP_REPLICATION_HOSTS }}|g" ${CONTAINER_SERVICE_DIR}/slapd/assets/config/replication/replication-enable.ldif
         sed -i "s|{{ LDAP_REPLICATION_HOSTS_CONFIG_SYNC_REPL }}|olcSyncRepl: rid=00$i provider=${!host} ${LDAP_REPLICATION_CONFIG_SYNCPROV}\n{{ LDAP_REPLICATION_HOSTS_CONFIG_SYNC_REPL }}|g" ${CONTAINER_SERVICE_DIR}/slapd/assets/config/replication/replication-enable.ldif
         sed -i "s|{{ LDAP_REPLICATION_HOSTS_DB_SYNC_REPL }}|olcSyncRepl: rid=10$i provider=${!host} ${LDAP_REPLICATION_DB_SYNCPROV}\n{{ LDAP_REPLICATION_HOSTS_DB_SYNC_REPL }}|g" ${CONTAINER_SERVICE_DIR}/slapd/assets/config/replication/replication-enable.ldif
@@ -536,7 +551,14 @@ EOF
   #
   if [ "${LDAP_TLS,,}" == "true" ]; then
     log-helper info "Configure ldap client TLS configuration..."
-    sed -i --follow-symlinks "s,TLS_CACERT.*,TLS_CACERT ${LDAP_TLS_CA_CRT_PATH},g" /etc/ldap/ldap.conf
+    # Create ldap.conf if it doesn't exist
+    [ -f /etc/ldap/ldap.conf ] || touch /etc/ldap/ldap.conf
+    # Update or add TLS_CACERT
+    if grep -q "TLS_CACERT" /etc/ldap/ldap.conf; then
+      sed -i "s,TLS_CACERT.*,TLS_CACERT ${LDAP_TLS_CA_CRT_PATH},g" /etc/ldap/ldap.conf
+    else
+      echo "TLS_CACERT ${LDAP_TLS_CA_CRT_PATH}" >> /etc/ldap/ldap.conf
+    fi
     echo "TLS_REQCERT ${LDAP_TLS_VERIFY_CLIENT}" >> /etc/ldap/ldap.conf
     cp -f /etc/ldap/ldap.conf ${CONTAINER_SERVICE_DIR}/slapd/assets/ldap.conf
 
@@ -561,6 +583,10 @@ EOF
   touch $FIRST_START_DONE
 fi
 
+# Create default ldap client config files if they don't exist
+[ -f ${CONTAINER_SERVICE_DIR}/slapd/assets/.ldaprc ] || touch ${CONTAINER_SERVICE_DIR}/slapd/assets/.ldaprc
+[ -f ${CONTAINER_SERVICE_DIR}/slapd/assets/ldap.conf ] || touch ${CONTAINER_SERVICE_DIR}/slapd/assets/ldap.conf
+
 ln -sf ${CONTAINER_SERVICE_DIR}/slapd/assets/.ldaprc $HOME/.ldaprc
 ln -sf ${CONTAINER_SERVICE_DIR}/slapd/assets/ldap.conf /etc/ldap/ldap.conf
 
@@ -568,7 +594,7 @@ ln -sf ${CONTAINER_SERVICE_DIR}/slapd/assets/ldap.conf /etc/ldap/ldap.conf
 # We need to make sure that /etc/hosts continues to include the
 # fully-qualified domain name and not just the specified hostname.
 # Without the FQDN, /bin/hostname --fqdn stops working.
-FQDN="$(/bin/hostname --fqdn)"
+# Note: FQDN is already set at the beginning of the script
 if [ "$FQDN" != "$HOSTNAME" ]; then
     FQDN_PARAM="$FQDN"
 else

@@ -3,7 +3,7 @@
 
 # All environment variables used after the container first start
 # must be defined here.
-# more information : https://github.com/osixia/docker-light-baseimage
+# more information : https://github.com/startcodex/docker-openldap
 
 # General container configuration
 # see table 5.1 in http://www.openldap.org/doc/admin24/slapdconf2.html for the available log levels.
@@ -18,3 +18,7 @@ DISABLE_CHOWN: false
 # Default port to bind slapd
 LDAP_PORT: 389
 LDAPS_PORT: 636
+
+# Fully qualified domain name (optional)
+# If not set, hostname --fqdn is used. Useful for Docker Swarm/Kubernetes deployments.
+#FQDN: "ldap-server.example.org"

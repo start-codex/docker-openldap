@@ -1,0 +1,67 @@
+#!/bin/bash
+# Complex environment variable helper
+# Replacement for light-baseimage complex-bash-env
+#
+# Usage: complex-bash-env iterate VAR_NAME
+# Returns variable names that can be dereferenced with ${!varname}
+# The values are exported to the current shell via eval
+
+ACTION="$1"
+VAR_NAME="$2"
+
+if [ "$ACTION" = "iterate" ]; then
+    # Get the variable value
+    var_value="${!VAR_NAME}"
+
+    # If the variable is set in the environment, try to parse it
+    if [ -n "$var_value" ]; then
+        # Handle osixia format: #DIFFNAME#value1 #DIFFNAME#value2
+        if [[ "$var_value" == *"#DIFFNAME#"* ]]; then
+            # Split by space and process each item
+            i=0
+            for item in $var_value; do
+                # Remove #DIFFNAME# prefix if present
+                item="${item#\#DIFFNAME\#}"
+                if [ -n "$item" ]; then
+                    var="${VAR_NAME}_${i}"
+                    # Print export command for eval and variable name
+                    echo "export ${var}='${item}';"
+                    ((i++))
+                fi
+            done
+        # Handle JSON array format: ["item1", "item2"]
+        elif [[ "$var_value" =~ ^\[.*\]$ ]]; then
+            # Remove brackets and quotes, split by comma
+            cleaned=$(echo "$var_value" | sed 's/^\[//;s/\]$//;s/"//g')
+            IFS=',' read -ra items <<< "$cleaned"
+            for i in "${!items[@]}"; do
+                item=$(echo "${items[$i]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                var="${VAR_NAME}_${i}"
+                echo "export ${var}='${item}';"
+            done
+        # Handle space-separated values
+        elif [[ "$var_value" == *" "* ]]; then
+            i=0
+            for item in $var_value; do
+                var="${VAR_NAME}_${i}"
+                echo "export ${var}='${item}';"
+                ((i++))
+            done
+        else
+            # Handle single value
+            echo "export ${VAR_NAME}_0='${var_value}';"
+        fi
+    else
+        # Try to find numbered variables (VAR_NAME_0, VAR_NAME_1, etc.)
+        i=0
+        while true; do
+            var="${VAR_NAME}_${i}"
+            if [ -n "${!var}" ]; then
+                echo "$var"
+                ((i++))
+            else
+                break
+            fi
+        done
+    fi
+fi
