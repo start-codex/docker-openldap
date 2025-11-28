@@ -1,32 +1,21 @@
-# Use osixia/light-baseimage
-# sources: https://github.com/osixia/docker-light-baseimage
-FROM osixia/light-baseimage:1.3.2
-
-ARG OPENLDAP_PACKAGE_VERSION=2.4.57
+# OpenLDAP Docker Image
+# Based on Debian Trixie with OpenLDAP 2.6.x
+FROM debian:trixie-slim
 
 ARG LDAP_OPENLDAP_GID
 ARG LDAP_OPENLDAP_UID
 
-ARG PQCHECKER_VERSION=2.0.0
-ARG PQCHECKER_MD5=c005ce596e97d13e39485e711dcbc7e1
-
-# Add openldap user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
+# Add openldap user and group first to make sure their IDs get assigned consistently
 # If explicit uid or gid is given, use it.
 RUN if [ -z "${LDAP_OPENLDAP_GID}" ]; then groupadd -g 911 -r openldap; else groupadd -r -g ${LDAP_OPENLDAP_GID} openldap; fi \
     && if [ -z "${LDAP_OPENLDAP_UID}" ]; then useradd -u 911 -r -g openldap openldap; else useradd -r -g openldap -u ${LDAP_OPENLDAP_UID} openldap; fi
 
-# Add buster-backports in preparation for downloading newer openldap components, especially sladp
-RUN echo "deb http://ftp.debian.org/debian buster-backports main" >> /etc/apt/sources.list
-
-# Install OpenLDAP, ldap-utils and ssl-tools from the (backported) baseimage and clean apt-get files
-# sources: https://github.com/osixia/docker-light-baseimage/blob/master/image/tool/add-service-available
-#          https://github.com/osixia/docker-light-baseimage/blob/master/image/service-available/:ssl-tools/download.sh
-RUN echo "path-include /usr/share/doc/krb5*" >> /etc/dpkg/dpkg.cfg.d/docker && apt-get -y update \
-    && /container/tool/add-service-available :ssl-tools \
-    && LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -t buster-backports install -y --no-install-recommends \
+# Install OpenLDAP and required packages
+RUN echo "path-include /usr/share/doc/krb5*" >> /etc/dpkg/dpkg.cfg.d/docker \
+    && apt-get -y update \
+    && LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
-    curl \
-    ldap-utils=${OPENLDAP_PACKAGE_VERSION}\* \
+    ldap-utils \
     libsasl2-modules \
     libsasl2-modules-db \
     libsasl2-modules-gssapi-mit \
@@ -34,30 +23,44 @@ RUN echo "path-include /usr/share/doc/krb5*" >> /etc/dpkg/dpkg.cfg.d/docker && a
     libsasl2-modules-otp \
     libsasl2-modules-sql \
     openssl \
-    slapd=${OPENLDAP_PACKAGE_VERSION}\* \
-    slapd-contrib=${OPENLDAP_PACKAGE_VERSION}\* \
+    slapd \
+    slapd-contrib \
     krb5-kdc-ldap \
-    && curl -o pqchecker.deb -SL http://www.meddeb.net/pub/pqchecker/deb/8/pqchecker_${PQCHECKER_VERSION}_amd64.deb \
-    && echo "${PQCHECKER_MD5} *pqchecker.deb" | md5sum -c - \
-    && dpkg -i pqchecker.deb \
-    && rm pqchecker.deb \
-    && update-ca-certificates \
-    && apt-get remove -y --purge --auto-remove curl ca-certificates \
+    procps \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && rm -rf /var/lib/ldap/* /etc/ldap/slapd.d/*
+
+# Create directory structure
+RUN mkdir -p /container/service/slapd/assets \
+    && mkdir -p /container/environment/99-default \
+    && mkdir -p /container/state \
+    && mkdir -p /container/tool \
+    && mkdir -p /var/run/slapd \
+    && chown openldap:openldap /var/run/slapd
+
+# Add helper tools
+ADD tool /container/tool
+RUN chmod +x /container/tool/*
 
 # Add service directory to /container/service
 ADD service /container/service
 
-# Use baseimage install-service script
-# https://github.com/osixia/docker-light-baseimage/blob/master/image/tool/install-service
-RUN /container/tool/install-service
+# Make scripts executable
+RUN chmod +x /container/service/slapd/*.sh
 
 # Add default env variables
 ADD environment /container/environment/99-default
 
 # Expose default ldap and ldaps ports
 EXPOSE 389 636
+
+# Set environment variables
+ENV CONTAINER_SERVICE_DIR=/container/service \
+    CONTAINER_STATE_DIR=/container/state
+
+# Entrypoint
+ENTRYPOINT ["/container/tool/run"]
 
 # Put ldap config and database dir in a volume to persist data.
 # VOLUME /etc/ldap/slapd.d /var/lib/ldap

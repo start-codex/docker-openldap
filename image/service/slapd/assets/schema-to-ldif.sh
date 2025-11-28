@@ -1,13 +1,15 @@
 #!/bin/bash
 
 # set -x (bash debug) if log level is trace
-# https://github.com/osixia/docker-light-baseimage/blob/master/image/tool/log-helper
 log-helper level eq trace && set -x
 
 SCHEMAS=$1
 
 tmpd=`mktemp -d`
 pushd ${tmpd} >>/dev/null
+
+# Create output directory for slaptest (must be empty)
+mkdir -p ldif_output
 
 echo "include /etc/ldap/schema/core.schema" >> convert.dat
 echo "include /etc/ldap/schema/cosine.schema" >> convert.dat
@@ -24,7 +26,7 @@ for schema in ${SCHEMAS} ; do
     echo "include ${schema}" >> convert.dat
 done
 
-slaptest -f convert.dat -F .
+slaptest -f convert.dat -F ldif_output
 
 if [ $? -ne 0 ] ; then
     log-helper error "slaptest conversion failed"
@@ -42,7 +44,7 @@ for schema in ${SCHEMAS} ; do
       continue
     fi
 
-    find . -name *\}${schema_name}.ldif -exec mv '{}' ./${ldif_file} \;
+    find ldif_output -name *\}${schema_name}.ldif -exec mv '{}' ./${ldif_file} \;
 
     # TODO: these sed invocations could all be combined
     sed -i "/dn:/ c dn: cn=${schema_name},cn=schema,cn=config" ${ldif_file}

@@ -1,0 +1,77 @@
+#!/bin/bash
+# SSL helper for certificate generation
+# Replacement for light-baseimage ssl-helper
+
+set -e
+
+PREFIX="$1"
+CRT_PATH="$2"
+KEY_PATH="$3"
+CA_CRT_PATH="$4"
+
+# Get configuration from environment variables using prefix
+get_var() {
+    local var_name="${PREFIX^^}_$1"
+    echo "${!var_name}"
+}
+
+SSL_HELPER_AUTO_GENERATE="${SSL_HELPER_AUTO_GENERATE:-true}"
+
+# Check if certificate generation is needed
+if [ "$SSL_HELPER_AUTO_GENERATE" != "true" ]; then
+    exit 0
+fi
+
+# Check if certificates already exist
+if [ -f "$CRT_PATH" ] && [ -f "$KEY_PATH" ]; then
+    exit 0
+fi
+
+# Create directory if it doesn't exist
+mkdir -p "$(dirname "$CRT_PATH")"
+mkdir -p "$(dirname "$KEY_PATH")"
+[ -n "$CA_CRT_PATH" ] && mkdir -p "$(dirname "$CA_CRT_PATH")"
+
+# Generate self-signed certificate
+SUBJECT="/C=US/ST=State/L=City/O=Organization/CN=$(hostname -f)"
+
+# Generate CA if CA path is provided and doesn't exist
+if [ -n "$CA_CRT_PATH" ] && [ ! -f "$CA_CRT_PATH" ]; then
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "${CA_CRT_PATH%.crt}.key" \
+        -out "$CA_CRT_PATH" \
+        -subj "$SUBJECT" 2>/dev/null
+
+    # Generate server certificate signed by CA
+    openssl req -nodes -newkey rsa:2048 \
+        -keyout "$KEY_PATH" \
+        -out "${CRT_PATH%.crt}.csr" \
+        -subj "$SUBJECT" 2>/dev/null
+
+    openssl x509 -req -days 365 \
+        -in "${CRT_PATH%.crt}.csr" \
+        -CA "$CA_CRT_PATH" \
+        -CAkey "${CA_CRT_PATH%.crt}.key" \
+        -CAcreateserial \
+        -out "$CRT_PATH" 2>/dev/null
+
+    rm -f "${CRT_PATH%.crt}.csr"
+else
+    # Generate self-signed certificate
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "$KEY_PATH" \
+        -out "$CRT_PATH" \
+        -subj "$SUBJECT" 2>/dev/null
+
+    # Copy cert as CA if CA path provided
+    if [ -n "$CA_CRT_PATH" ] && [ ! -f "$CA_CRT_PATH" ]; then
+        cp "$CRT_PATH" "$CA_CRT_PATH"
+    fi
+fi
+
+# Set permissions
+chmod 600 "$KEY_PATH"
+chmod 644 "$CRT_PATH"
+[ -f "$CA_CRT_PATH" ] && chmod 644 "$CA_CRT_PATH"
+
+echo "SSL certificates generated successfully"

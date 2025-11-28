@@ -1,17 +1,18 @@
-# osixia/openldap
+# startcodex/openldap
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/osixia/openldap.svg)](https://hub.docker.com/r/osixia/openldap/)
-[![Docker Stars](https://img.shields.io/docker/stars/osixia/openldap.svg)](https://hub.docker.com/r/osixia/openldap/)
-[![Layers](https://images.microbadger.com/badges/image/osixia/openldap.svg)](https://hub.docker.com/r/osixia/openldap/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/startcodex/openldap.svg)](https://hub.docker.com/r/startcodex/openldap/)
+[![Docker Stars](https://img.shields.io/docker/stars/startcodex/openldap.svg)](https://hub.docker.com/r/startcodex/openldap/)
 
-Latest release: 1.5.0 - [OpenLDAP 2.4.57](https://www.openldap.org/software/release/changes.html) -  [Changelog](CHANGELOG.md) | [Docker Hub](https://hub.docker.com/r/osixia/openldap/) 
+Latest release: 2.0.0 - OpenLDAP 2.6.x (Debian Trixie) -  [Changelog](CHANGELOG.md) | [Docker Hub](https://hub.docker.com/r/startcodex/openldap/)
 
 **A docker image to run OpenLDAP.**
+
+> **Base Image**: This image is built on Debian Trixie (testing) which provides OpenLDAP 2.6.x with the latest security patches and features.
 
 > OpenLDAP website : [www.openldap.org](https://www.openldap.org/)
 
 
-- [osixia/openldap](#osixiaopenldap)
+- [startcodex/openldap](#startcodexopenldap)
 	- [Contributing](#contributing)
 	- [Quick Start](#quick-start)
 	- [Beginner Guide](#beginner-guide)
@@ -39,11 +40,14 @@ Latest release: 1.5.0 - [OpenLDAP 2.4.57](https://www.openldap.org/software/rele
 			- [Docker Secrets](#docker-secrets)
 			- [Make your own image or extend this image](#make-your-own-image-or-extend-this-image)
 	- [Advanced User Guide](#advanced-user-guide)
-		- [Extend osixia/openldap:1.5.0 image](#extend-osixiaopenldap150-image)
+		- [Extend startcodex/openldap:2.0.0 image](#extend-startcodexopenldap200-image)
 		- [Make your own openldap image](#make-your-own-openldap-image)
 		- [Tests](#tests)
 		- [Kubernetes](#kubernetes)
-		- [Under the hood: osixia/light-baseimage](#under-the-hood-osixialight-baseimage)
+	- [Upgrading from osixia/openldap](#upgrading-from-osixiaopenldap)
+		- [Breaking Changes](#breaking-changes)
+		- [Migration Steps](#migration-steps)
+		- [New Features in 2.0.0](#new-features-in-200)
 	- [Security](#security)
 		- [Known security issues](#known-security-issues)
 	- [Changelog](#changelog)
@@ -53,20 +57,29 @@ Latest release: 1.5.0 - [OpenLDAP 2.4.57](https://www.openldap.org/software/rele
 If you find this image useful here's how you can help:
 
 - Send a pull request with your kickass new features and bug fixes
-- Help new users with [issues](https://github.com/osixia/docker-openldap/issues) they may encounter
+- Help new users with [issues](https://github.com/startcodex/docker-openldap/issues) they may encounter
 - Support the development of this image and star this repo !
 
 ## Quick Start
 Run OpenLDAP docker image:
 
 ```sh
-docker run --name my-openldap-container --detach osixia/openldap:1.5.0
+docker run --name my-openldap-container --detach startcodex/openldap:2.0.0
 ```
 
 Do not forget to add the port mapping for both port 389 and 636 if you wish to access the ldap server from another machine.
 
 ```sh
-docker run -p 389:389 -p 636:636 --name my-openldap-container --detach osixia/openldap:1.5.0
+docker run -p 389:389 -p 636:636 --name my-openldap-container --detach startcodex/openldap:2.0.0
+```
+
+You can also use custom ports by setting the `LDAP_PORT` and `LDAPS_PORT` environment variables:
+
+```sh
+docker run -p 3389:3389 -p 6636:6636 \
+	--env LDAP_PORT=3389 \
+	--env LDAPS_PORT=6636 \
+	--name my-openldap-container --detach startcodex/openldap:2.0.0
 ```
 
 Either command starts a new container with OpenLDAP running inside. Let's make the first search in our LDAP container:
@@ -109,7 +122,7 @@ docker run \
 	--env LDAP_ORGANISATION="My Company" \
 	--env LDAP_DOMAIN="my-company.com" \
 	--env LDAP_ADMIN_PASSWORD="JonSn0w" \
-	--detach osixia/openldap:1.5.0
+	--detach startcodex/openldap:2.0.0
 ```
 
 #### Data persistence
@@ -174,12 +187,12 @@ argument to entrypoint if you don't want to overwrite them.
 # single file example:
 docker run \
 	--volume ./bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/50-bootstrap.ldif \
-	osixia/openldap:1.5.0 --copy-service
+	startcodex/openldap:2.0.0 --copy-service
 
 # directory example:
 docker run \
 	--volume ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom \
-	osixia/openldap:1.5.0 --copy-service
+	startcodex/openldap:2.0.0 --copy-service
 ```
 
 #### Seed from internal path
@@ -221,21 +234,23 @@ simply mount this directories as a volume to `/var/lib/ldap` and `/etc/ldap/slap
 docker run \
 	--volume /data/slapd/database:/var/lib/ldap \
 	--volume /data/slapd/config:/etc/ldap/slapd.d \
-	--detach osixia/openldap:1.5.0
+	--detach startcodex/openldap:2.0.0
 ```
 
 You can also use data volume containers. Please refer to:
 > [https://docs.docker.com/engine/tutorials/dockervolumes/](https://docs.docker.com/engine/tutorials/dockervolumes/)
 
-Note: By default this image is waiting an **mdb**  database backend, if you want to use any other database backend set backend type via the LDAP_BACKEND environment variable.
+Note: This image only supports the **mdb** database backend. The hdb and bdb backends were removed in OpenLDAP 2.5.
 
 ### Backup
-A simple solution to backup your ldap server, is our openldap-backup docker image:
-> [osixia/openldap-backup](https://github.com/osixia/docker-openldap-backup)
+A simple solution to backup your ldap server is to use slapcat:
+
+```sh
+docker exec my-openldap-container slapcat -l backup.ldif
+```
 
 ### Administrate your ldap server
-If you are looking for a simple solution to administrate your ldap server you can take a look at our phpLDAPadmin docker image:
-> [osixia/phpldapadmin](https://github.com/osixia/docker-phpLDAPadmin)
+If you are looking for a simple solution to administrate your ldap server you can use phpLDAPadmin.
 
 ### TLS
 
@@ -243,7 +258,7 @@ If you are looking for a simple solution to administrate your ldap server you ca
 By default, TLS is already configured and enabled, certificate is created using container hostname (it can be set by docker run --hostname option eg: ldap.example.org).
 
 ```sh
-docker run --hostname ldap.my-company.com --detach osixia/openldap:1.5.0
+docker run --hostname ldap.my-company.com --detach startcodex/openldap:2.0.0
 ```
 
 #### Use your own certificate
@@ -257,7 +272,7 @@ docker run \
 	--env LDAP_TLS_CRT_FILENAME=my-ldap.crt \
 	--env LDAP_TLS_KEY_FILENAME=my-ldap.key \
 	--env LDAP_TLS_CA_CRT_FILENAME=the-ca.crt \
-	--detach osixia/openldap:1.5.0
+	--detach startcodex/openldap:2.0.0
 ```
 
 Other solutions are available please refer to the [Advanced User Guide](#advanced-user-guide)
@@ -265,17 +280,20 @@ Other solutions are available please refer to the [Advanced User Guide](#advance
 #### Disable TLS
 Add --env LDAP_TLS=false to the run command:
 
-	docker run --env LDAP_TLS=false --detach osixia/openldap:1.5.0
+	docker run --env LDAP_TLS=false --detach startcodex/openldap:2.0.0
 
 ### Multi master replication
+
+> **Note for OpenLDAP 2.5+**: The `olcMirrorMode` attribute has been renamed to `olcMultiProvider`. This image handles this automatically, but if you're migrating from an older version or using custom ldif files, you may need to update your configuration.
+
 Quick example, with the default config.
 
 	#Create the first ldap server, save the container id in LDAP_CID and get its IP:
-	LDAP_CID=$(docker run --hostname ldap.example.org --env LDAP_REPLICATION=true --detach osixia/openldap:1.5.0)
+	LDAP_CID=$(docker run --hostname ldap.example.org --env LDAP_REPLICATION=true --detach startcodex/openldap:2.0.0)
 	LDAP_IP=$(docker inspect -f "{{ .NetworkSettings.IPAddress }}" $LDAP_CID)
 
 	#Create the second ldap server, save the container id in LDAP2_CID and get its IP:
-	LDAP2_CID=$(docker run --hostname ldap2.example.org --env LDAP_REPLICATION=true --detach osixia/openldap:1.5.0)
+	LDAP2_CID=$(docker run --hostname ldap2.example.org --env LDAP_REPLICATION=true --detach startcodex/openldap:2.0.0)
 	LDAP2_IP=$(docker inspect -f "{{ .NetworkSettings.IPAddress }}" $LDAP2_CID)
 
 	#Add the pair "ip hostname" to /etc/hosts on each containers,
@@ -311,7 +329,7 @@ You may have some problems with mounted files on some systems. The startup scrip
 
 To fix that run the container with `--copy-service` argument :
 
-		docker run [your options] osixia/openldap:1.5.0 --copy-service
+		docker run [your options] startcodex/openldap:2.0.0 --copy-service
 
 ### Debug
 
@@ -321,13 +339,13 @@ Available levels are: `none`, `error`, `warning`, `info`, `debug` and `trace`.
 Example command to run the container in `debug` mode:
 
 ```sh
-docker run --detach osixia/openldap:1.5.0 --loglevel debug
+docker run --detach startcodex/openldap:2.0.0 --loglevel debug
 ```
 
 See all command line options:
 
 ```sh
-docker run osixia/openldap:1.5.0 --help
+docker run startcodex/openldap:2.0.0 --help
 ```
 
 ## Environment Variables
@@ -339,7 +357,12 @@ See how to [set your own environment variables](#set-your-own-environment-variab
 Variables defined in this file are available at anytime in the container environment.
 
 General container configuration:
-- **LDAP_LOG_LEVEL**: Slap log level. defaults to  `256`. See table 5.1 in https://www.openldap.org/doc/admin24/slapdconf2.html for the available log levels.
+- **LDAP_LOG_LEVEL**: Slap log level. defaults to  `256`. See table 5.1 in https://www.openldap.org/doc/admin26/slapdconf2.html for the available log levels.
+- **LDAP_NOFILE**: Set the ulimit for maximum number of open file descriptors. Defaults to `1024`.
+
+Port configuration:
+- **LDAP_PORT**: Port to bind slapd for LDAP connections. Defaults to `389`.
+- **LDAPS_PORT**: Port to bind slapd for LDAPS (TLS) connections. Defaults to `636`.
 
 ### Default.startup.yaml
 Variables defined in this file are only available during the container **first start** in **startup files**.
@@ -363,9 +386,9 @@ Required and used for new ldap server only:
 - **LDAP_RFC2307BIS_SCHEMA** Use rfc2307bis schema instead of nis schema. Defaults to `false`
 
 Backend:
-- **LDAP_BACKEND**: Ldap backend. Defaults to `mdb` (previously hdb in image versions up to v1.1.10)
+- **LDAP_BACKEND**: Ldap backend. Only `mdb` is supported (hdb/bdb were removed in OpenLDAP 2.5)
 
-	Help: https://www.openldap.org/doc/admin24/backends.html
+	Help: https://www.openldap.org/doc/admin26/backends.html
 
 TLS options:
 - **LDAP_TLS**: Add openldap TLS capabilities. Can't be removed once set to true. Defaults to `true`.
@@ -377,7 +400,7 @@ TLS options:
 - **LDAP_TLS_CIPHER_SUITE**: TLS cipher suite. Defaults to `SECURE256:+SECURE128:-VERS-TLS-ALL:+VERS-TLS1.2:-RSA:-DHE-DSS:-CAMELLIA-128-CBC:-CAMELLIA-256-CBC`, based on Red Hat's [TLS hardening guide](https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/7/html/Security_Guide/sec-Hardening_TLS_Configuration.html)
 - **LDAP_TLS_VERIFY_CLIENT**: TLS verify client. Defaults to `demand`
 
-	Help: https://www.openldap.org/doc/admin24/tls.html
+	Help: https://www.openldap.org/doc/admin26/tls.html
 
 Replication options:
 - **LDAP_REPLICATION**: Add openldap replication capabilities. Possible values : `true`, `false`, `own`. Defaults to `false`. Setting this to `own` allow to provide own replication settings via custom bootstrap ldifs.
@@ -385,6 +408,18 @@ Replication options:
 - **LDAP_REPLICATION_CONFIG_SYNCPROV**: olcSyncRepl options used for the config database. Without **rid** and **provider** which are automatically added based on LDAP_REPLICATION_HOSTS.  Defaults to `binddn="cn=admin,cn=config" bindmethod=simple credentials=$LDAP_CONFIG_PASSWORD searchbase="cn=config" type=refreshAndPersist retry="60 +" timeout=1 starttls=critical`
 
 - **LDAP_REPLICATION_DB_SYNCPROV**: olcSyncRepl options used for the database. Without **rid** and **provider** which are automatically added based on LDAP_REPLICATION_HOSTS.  Defaults to `binddn="cn=admin,$LDAP_BASE_DN" bindmethod=simple credentials=$LDAP_ADMIN_PASSWORD searchbase="$LDAP_BASE_DN" type=refreshAndPersist interval=00:00:00:10 retry="60 +" timeout=1 starttls=critical`
+
+	> **Important Note**: The default replication configuration uses `starttls=critical`, which requires TLS certificates to be properly configured and trusted between all replication hosts. If you're testing without valid TLS certificates or in environments where TLS between nodes isn't needed, you can override these variables to remove the `starttls=critical` option.
+
+	Example replication without TLS (for testing only):
+	```sh
+	docker run \
+		--hostname ldap.example.org \
+		--env LDAP_REPLICATION=true \
+		--env LDAP_REPLICATION_CONFIG_SYNCPROV='binddn="cn=admin,cn=config" bindmethod=simple credentials=$LDAP_CONFIG_PASSWORD searchbase="cn=config" type=refreshAndPersist retry="60 +" timeout=1' \
+		--env LDAP_REPLICATION_DB_SYNCPROV='binddn="cn=admin,$LDAP_BASE_DN" bindmethod=simple credentials=$LDAP_ADMIN_PASSWORD searchbase="$LDAP_BASE_DN" type=refreshAndPersist interval=00:00:00:10 retry="60 +" timeout=1' \
+		--detach startcodex/openldap:2.0.0
+	```
 
 - **LDAP_REPLICATION_HOSTS**: list of replication hosts, must contain the current container hostname set by --hostname on docker run command. Defaults to :
 	```yaml
@@ -394,7 +429,7 @@ Replication options:
 
 	If you want to set this variable at docker run command add the tag `#PYTHON2BASH:` and convert the yaml in python:
 
-		docker run --env LDAP_REPLICATION_HOSTS="#PYTHON2BASH:['ldap://ldap.example.org','ldap://ldap2.example.org']" --detach osixia/openldap:1.5.0
+		docker run --env LDAP_REPLICATION_HOSTS="#PYTHON2BASH:['ldap://ldap.example.org','ldap://ldap2.example.org']" --detach startcodex/openldap:2.0.0
 
 	To convert yaml to python online: https://yaml-online-parser.appspot.com/
 
@@ -406,6 +441,7 @@ Other environment variables:
 - **LDAP_REMOVE_CONFIG_AFTER_SETUP**: delete config folder after setup. Defaults to `true`
 - **LDAP_SSL_HELPER_PREFIX**: ssl-helper environment variables prefix. Defaults to `ldap`, ssl-helper first search config from LDAP_SSL_HELPER_* variables, before SSL_HELPER_* variables.
 - **HOSTNAME**: set the hostname of the running openldap server. Defaults to whatever docker creates.
+- **FQDN**: Fully Qualified Domain Name. If set, this value is used instead of calling `hostname --fqdn`. Useful for Docker Swarm/Kubernetes deployments where the hostname flag may not work as expected. Defaults to `(empty)` - uses hostname command.
 - **DISABLE_CHOWN**: do not perform any chown to fix file ownership. Defaults to `false`
 - LDAP_OPENLDAP_UID: runtime docker user uid to run container as
 - LDAP_OPENLDAP_GID: runtime docker user gid to run container as
@@ -421,7 +457,7 @@ docker run \
 	--env LDAP_ORGANISATION="My company" \
 	--env LDAP_DOMAIN="my-company.com" \
 	--env LDAP_ADMIN_PASSWORD="JonSn0w" \
-	--detach osixia/openldap:1.5.0
+	--detach startcodex/openldap:2.0.0
 ```
 
 Be aware that environment variable added in command line will be available at any time
@@ -435,7 +471,7 @@ For example if your environment files **my-env.yaml** and **my-env.startup.yaml*
 ```sh
 docker run \
 	--volume /data/ldap/environment:/container/environment/01-custom \
-	--detach osixia/openldap:1.5.0
+	--detach startcodex/openldap:2.0.0
 ```
 
 Take care to link your environment files folder to `/container/environment/XX-somedir` (with XX < 99 so they will be processed before default environment files) and not  directly to `/container/environment` because this directory contains predefined baseimage environment files to fix container environment (INITRD, LANG, LANGUAGE and LC_CTYPE).
@@ -445,7 +481,7 @@ Note: the container will try to delete the **\*.startup.yaml** file after the en
 ```sh
 docker run \
 	--volume /data/ldap/environment/my-env.yaml:/container/environment/01-custom/env.yaml \
-	--detach osixia/openldap:1.5.0
+	--detach startcodex/openldap:2.0.0
 ```
 
 #### Docker Secrets
@@ -458,9 +494,8 @@ passwords using the [Docker secrets](https://docs.docker.com/engine/swarm/secret
 docker run \
 	--env LDAP_ORGANISATION="My company" \
 	--env LDAP_DOMAIN="my-company.com" \
-	--env LDAP_ADMIN_PASSWORD_FILE=/run/secrets/ \
-	authentication_admin_pw \
-	--detach osixia/openldap:1.2.4
+	--env LDAP_ADMIN_PASSWORD_FILE=/run/secrets/authentication_admin_pw \
+	--detach startcodex/openldap:2.0.0
 ```
 
 Currently this is only supported for LDAP_ADMIN_PASSWORD, LDAP_CONFIG_PASSWORD, LDAP_READONLY_USER_PASSWORD
@@ -471,14 +506,14 @@ This is the best solution if you have a private registry. Please refer to the [A
 
 ## Advanced User Guide
 
-### Extend osixia/openldap:1.5.0 image
+### Extend startcodex/openldap:2.0.0 image
 
 If you need to add your custom TLS certificate, bootstrap config or environment files the easiest way is to extends this image.
 
 Dockerfile example:
 
 ```dockerfile
-FROM osixia/openldap:1.5.0
+FROM startcodex/openldap:2.0.0
 LABEL maintainer="Your Name <your@name.com>"
 
 ADD bootstrap /container/service/slapd/assets/config/bootstrap
@@ -486,7 +521,7 @@ ADD certs /container/service/slapd/assets/certs
 ADD environment /container/environment/01-custom
 ```
 
-See complete example in **example/extend-osixia-openldap**
+See complete example in **example/extend-startcodex-openldap**
 
 Warning: if you want to install new packages from debian repositories, this image has a configuration to prevent documentation and locales to be installed. If you need the doc and locales remove the following files :
 **/etc/dpkg/dpkg.cfg.d/01_nodoc** and **/etc/dpkg/dpkg.cfg.d/01_nolocales**
@@ -496,15 +531,15 @@ Warning: if you want to install new packages from debian repositories, this imag
 Clone this project:
 
 ```sh
-git clone https://github.com/osixia/docker-openldap
+git clone https://github.com/startcodex/docker-openldap
 cd docker-openldap
 ```
 
 Adapt Makefile, set your image NAME and VERSION, for example:
 
 ```makefile
-NAME = osixia/openldap
-VERSION = 1.1.9
+NAME = startcodex/openldap
+VERSION = 2.0.0
 ```
 
 become:
@@ -548,22 +583,57 @@ More information:
 - https://kubernetes.io/
 - https://github.com/kubernetes/kubernetes
 
-osixia-openldap kubernetes examples are available in **example/kubernetes**
+startcodex-openldap kubernetes examples are available in **example/kubernetes**
 
-### Under the hood: osixia/light-baseimage
+## Upgrading from osixia/openldap
 
-This image is based on osixia/light-baseimage.
-It uses the following features:
+This image is a fork of `osixia/openldap` with significant updates. If you're migrating from `osixia/openldap:1.5.0`, here are the key changes:
 
-- **ssl-tools** service to generate tls certificates
-- **log-helper** tool to print log messages based on the log level
-- **run** tool as entrypoint to init the container environment
+### Breaking Changes
 
-To fully understand how this image works take a look at:
-https://github.com/osixia/docker-light-baseimage
+1. **OpenLDAP 2.4 → 2.6**: Major version upgrade with breaking changes
+   - **Backend**: Only `mdb` backend is supported. `hdb` and `bdb` backends were removed in OpenLDAP 2.5
+   - **Replication**: `olcMirrorMode` attribute renamed to `olcMultiProvider`
+   - **Commands**: The `-h` and `-p` flags for ldapsearch/ldapadd are deprecated. Use `-H ldap://host` URI format instead
+
+2. **Base Image**: Changed from Debian Buster to Debian Trixie (testing) for OpenLDAP 2.6.x support
+
+3. **Image Name**: Changed from `osixia/openldap` to `startcodex/openldap`
+
+### Migration Steps
+
+1. **Backup your data** before migrating:
+   ```sh
+   docker exec my-openldap-container slapcat -n 0 -l config-backup.ldif
+   docker exec my-openldap-container slapcat -n 1 -l data-backup.ldif
+   ```
+
+2. **Check your custom ldif files** for:
+   - Replace `olcMirrorMode` with `olcMultiProvider`
+   - Replace `hdb` or `bdb` backend references with `mdb`
+   - Update any ldap commands using `-h host -p port` to use `-H ldap://host:port`
+
+3. **Update your docker-compose or run commands**:
+   ```yaml
+   # Old
+   image: osixia/openldap:1.5.0
+   # New
+   image: startcodex/openldap:2.0.0
+   ```
+
+4. **Test thoroughly** before deploying to production, especially:
+   - TLS connections
+   - Replication (if used)
+   - Custom schemas and ldif files
+
+### New Features in 2.0.0
+
+- **FQDN environment variable**: Set hostname explicitly for Docker Swarm/Kubernetes
+- **Configurable ports**: `LDAP_PORT` and `LDAPS_PORT` environment variables
+- **OpenLDAP 2.6 features**: Latest security patches and improvements
 
 ## Security
-If you discover a security vulnerability within this docker image, please send an email to the Osixia! team at security@osixia.net. For minor vulnerabilities feel free to add an issue here on github.
+If you discover a security vulnerability within this docker image, please create an issue on github.
 
 Please include as many details as possible.
 

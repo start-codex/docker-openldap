@@ -2,7 +2,7 @@
 
 After setting the variables you can get strange variables like:
 
-https://github.com/osixia/docker-openldap/issues/342
+https://github.com/startcodex/docker-openldap/issues/342
 
 I have found that using this helm chart does not have those issues:
 

@@ -107,12 +107,12 @@ load test_helper
 
   echo "strongPassword" > $PWD/password.txt
 
-  run_image -h ldap.osixia.net -e LDAP_ADMIN_PASSWORD_FILE=/run/secrets/admin_pw.txt --volume $PWD/password.txt:/run/secrets/admin_pw.txt
+  run_image -h ldap.startcodex.net -e LDAP_ADMIN_PASSWORD_FILE=/run/secrets/admin_pw.txt --volume $PWD/password.txt:/run/secrets/admin_pw.txt
   wait_process slapd
 
   sleep 5
 
-  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.osixia.net -b dc=example,dc=org -ZZ -D "cn=admin,dc=example,dc=org" -w strongPassword
+  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.startcodex.net -b dc=example,dc=org -ZZ -D "cn=admin,dc=example,dc=org" -w strongPassword
   clear_container
 
   rm $PWD/password.txt
@@ -137,12 +137,12 @@ load test_helper
 
 @test "ldapsearch new database with strict TLS and custom ca/crt" {
 
-  run_image -h ldap.osixia.net -v $BATS_TEST_DIRNAME/ssl:/container/service/slapd/assets/certs -e LDAP_TLS_CRT_FILENAME=ldap-test.crt -e LDAP_TLS_KEY_FILENAME=ldap-test.key -e LDAP_TLS_CA_CRT_FILENAME=ca-test.crt
+  run_image -h ldap.startcodex.net -v $BATS_TEST_DIRNAME/ssl:/container/service/slapd/assets/certs -e LDAP_TLS_CRT_FILENAME=ldap-test.crt -e LDAP_TLS_KEY_FILENAME=ldap-test.key -e LDAP_TLS_CA_CRT_FILENAME=ca-test.crt
   wait_process slapd
 
   sleep 5
 
-  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.osixia.net -b dc=example,dc=org -ZZ -D "cn=admin,dc=example,dc=org" -w admin
+  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.startcodex.net -b dc=example,dc=org -ZZ -D "cn=admin,dc=example,dc=org" -w admin
   clear_container
 
   [ "$status" -eq 0 ]
@@ -151,12 +151,12 @@ load test_helper
 
 @test "ldapsearch new database with strict TLS and custom ca/crt and custom dhparam" {
 
-  run_image -h ldap.osixia.net -v $BATS_TEST_DIRNAME/ssl:/container/service/slapd/assets/certs -e LDAP_TLS_CRT_FILENAME=ldap-test.crt -e LDAP_TLS_KEY_FILENAME=ldap-test.key -e LDAP_TLS_DH_PARAM_FILENAME=ldap-test.dhparam -e LDAP_TLS_CA_CRT_FILENAME=ca-test.crt
+  run_image -h ldap.startcodex.net -v $BATS_TEST_DIRNAME/ssl:/container/service/slapd/assets/certs -e LDAP_TLS_CRT_FILENAME=ldap-test.crt -e LDAP_TLS_KEY_FILENAME=ldap-test.key -e LDAP_TLS_DH_PARAM_FILENAME=ldap-test.dhparam -e LDAP_TLS_CA_CRT_FILENAME=ca-test.crt
   wait_process slapd
 
   sleep 5
 
-  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.osixia.net -b dc=example,dc=org -ZZ -D "cn=admin,dc=example,dc=org" -w admin
+  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.startcodex.net -b dc=example,dc=org -ZZ -D "cn=admin,dc=example,dc=org" -w admin
   clear_container
 
   [ "$status" -eq 0 ]
@@ -170,7 +170,7 @@ load test_helper
 
   sleep 5
 
-  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.example.org -b dc=osixia,dc=net -D "cn=admin,dc=osixia,dc=net" -w admin
+  run docker exec $CONTAINER_ID ldapsearch -x -h ldap.example.org -b dc=startcodex,dc=net -D "cn=admin,dc=startcodex,dc=net" -w admin
   clear_container
 
   [ "$status" -eq 0 ]

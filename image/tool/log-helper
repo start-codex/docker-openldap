@@ -1,0 +1,68 @@
+#!/bin/bash
+# Simple log helper replacement for light-baseimage
+
+LOG_LEVEL="${LOG_LEVEL:-info}"
+
+# Log levels: error=0, warning=1, info=2, debug=3, trace=4
+get_level_num() {
+    case "$1" in
+        error) echo 0 ;;
+        warning) echo 1 ;;
+        info) echo 2 ;;
+        debug) echo 3 ;;
+        trace) echo 4 ;;
+        *) echo 2 ;;
+    esac
+}
+
+current_level=$(get_level_num "$LOG_LEVEL")
+
+# Handle 'level' command for conditional checks
+if [ "$1" = "level" ]; then
+    shift
+    if [ "$1" = "eq" ]; then
+        shift
+        target_level=$(get_level_num "$1")
+        [ "$current_level" -eq "$target_level" ]
+        exit $?
+    elif [ "$1" = "ge" ]; then
+        shift
+        target_level=$(get_level_num "$1")
+        [ "$current_level" -ge "$target_level" ]
+        exit $?
+    fi
+    exit 1
+fi
+
+# Log message
+level="$1"
+shift
+
+level_num=$(get_level_num "$level")
+
+if [ "$level_num" -le "$current_level" ]; then
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    prefix=""
+    case "$level" in
+        error) prefix="[ERROR]" ;;
+        warning) prefix="[WARNING]" ;;
+        info) prefix="[INFO]" ;;
+        debug) prefix="[DEBUG]" ;;
+        trace) prefix="[TRACE]" ;;
+    esac
+
+    # Handle -e flag for echo
+    if [ "$1" = "-e" ]; then
+        shift
+        echo -e "$timestamp $prefix $*"
+    else
+        # Read from stdin if no message provided or if piped
+        if [ -t 0 ]; then
+            echo "$timestamp $prefix $*"
+        else
+            while IFS= read -r line; do
+                echo "$timestamp $prefix $line"
+            done
+        fi
+    fi
+fi
